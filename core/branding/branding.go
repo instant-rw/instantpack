@@ -9,11 +9,11 @@ const (
 	PlanFileName     = "railpack-plan.json"
 	EnvPrefix        = "INSTANTPACK"
 	LegacyEnvPrefix  = "RAILPACK"
-	GitHubOwner      = "iranzithierry"
+	GitHubOwner      = "instant-rw"
 	GitHubRepository = "instantpack"
 	ContainerRegistry = "ghcr.io"
-	DocsURL          = "https://github.com/iranzithierry/instantpack"
-	ConfigDocsURL    = "https://github.com/iranzithierry/instantpack#configuration"
+	DocsURL          = "https://github.com/instant-rw/instantpack"
+	ConfigDocsURL    = "https://github.com/instant-rw/instantpack#configuration"
 )
 
 func DisplayName() string {
