@@ -13,6 +13,11 @@ permissions:
 
 env:
   MISE_ENV: ci
+  PRODUCTION_CONTAINER_REGISTRY: ghcr.io
+  PRODUCTION_GITHUB_REPOSITORY: ${{ github.repository }}
+  PRODUCTION_BUILDER_IMAGE_NAME: ghcr.io/${{ github.repository }}-builder
+  PRODUCTION_RUNTIME_IMAGE_NAME: ghcr.io/${{ github.repository }}-runtime
+  PRODUCTION_FRONTEND_IMAGE_NAME: ghcr.io/${{ github.repository }}-frontend
 
 jobs:
   publish-builder:
@@ -114,10 +119,11 @@ jobs:
           
       - name: Release Updated Instantpack CLI and Frontend Images
         id: goreleaser
-        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRODUCTION_FRONTEND_IMAGE_NAME: ghcr.io/${{ github.repository }}-frontend

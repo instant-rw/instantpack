@@ -1,5 +1,6 @@
 # run automatically when a tag is created by the release.yml workflow
 version: 2
+project_name: instantpack
 
 # TODO replace with a `go mod tidy -check` when go is upgraded
 before:
