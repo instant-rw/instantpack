@@ -31,12 +31,6 @@ export BUILDKIT_HOST='docker-container://buildkit'
 
 Instantpack keeps upstream `railpack.json` compatibility. Environment variables accept both `INSTANTPACK_*` and legacy `RAILPACK_*` prefixes.
 
-To bypass Bun's `--frozen-lockfile` during install (useful when lockfiles are out of sync):
-
-```bash
-export INSTANTPACK_BUN_NO_FROZEN_LOCKFILE=true
-```
-
 ## Release
 
 Push a version tag to trigger the GitHub Actions release workflow:
