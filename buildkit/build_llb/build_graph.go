@@ -14,6 +14,7 @@ import (
 	"github.com/moby/buildkit/util/system"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/railwayapp/railpack/buildkit/graph"
+	"github.com/railwayapp/railpack/core/branding"
 	"github.com/railwayapp/railpack/core/generate"
 	"github.com/railwayapp/railpack/core/plan"
 )
@@ -40,10 +41,10 @@ type BuildGraphOutput struct {
 func NewBuildGraph(plan *plan.BuildPlan, localState *llb.State, cacheStore *BuildKitCacheStore, secretsHash string, platform *specs.Platform, githubToken string) (*BuildGraph, error) {
 	var secretsFile *llb.State
 	if secretsHash != "" {
-		st := llb.Scratch().File(llb.Mkfile("/secrets-hash", 0644, []byte(secretsHash)), llb.WithCustomName("[railpack] secrets hash"))
+		st := llb.Scratch().File(llb.Mkfile("/secrets-hash", 0644, []byte(secretsHash)), llb.WithCustomName(branding.BuildKitLabel("secrets hash")))
 		secretsFile = &st
 	}
-	usedSecretsBase := llb.Image("alpine:latest", llb.WithCustomName("[railpack] loading secrets"))
+	usedSecretsBase := llb.Image("alpine:latest", llb.WithCustomName(branding.BuildKitLabel("loading secrets")))
 
 	g := &BuildGraph{
 		graph:      graph.NewGraph(),
@@ -375,16 +376,16 @@ func (g *BuildGraph) getSecretInvalidationMountOptions(node *StepNode, secretOpt
 		usedSecretsState := g.usedSecretsBase.
 			// Depend on the secrets-hash file so that it is invalidated when the secrets change
 			File(llb.Copy(*g.secretsFile, "/secrets-hash", "/secrets-hash"),
-				llb.WithCustomName("[railpack] copy secrets hash")).
+				llb.WithCustomName(branding.BuildKitLabel("copy secrets hash"))).
 			// Run the hash command to generate the used secrets hash
 			Run(append([]llb.RunOption{
 				llb.Shlex(hashCommand),
-				llb.WithCustomName("[railpack] hash used secrets")},
+				llb.WithCustomName(branding.BuildKitLabel("hash used secrets"))},
 				secretOpts...)...).Root()
 
 		usedSecretsHash := llb.Scratch().File(
 			llb.Copy(usedSecretsState, "/used-secrets-hash", "/used-secrets-hash"),
-			llb.WithCustomName("[railpack] copy used secrets hash"))
+			llb.WithCustomName(branding.BuildKitLabel("copy used secrets hash")))
 
 		// Mount the used secrets file so that the layer is invalidated when these secrets change
 		opts = append(opts, llb.AddMount("/used-secrets-hash", usedSecretsHash))

@@ -34,12 +34,12 @@ func TestGetImageName(t *testing.T) {
 		{
 			name:     "empty path returns fallback",
 			appDir:   "",
-			expected: "railpack-app",
+			expected: "instantpack-app",
 		},
 		{
 			name:     "path ending with separator",
 			appDir:   "/path/to/myapp" + string(filepath.Separator),
-			expected: "railpack-app",
+			expected: "instantpack-app",
 		},
 	}
 

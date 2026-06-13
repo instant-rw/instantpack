@@ -33,9 +33,9 @@ run = "go run cmd/cli/main.go"
 [tasks.debug-cli]
 run = "dlv debug github.com/railwayapp/railpack/cmd/cli --"
 
-# build the CLI binary (`./bin/railpack`) for local use outside the project
+# build the CLI binary (`./bin/instantpack`) for local use outside the project
 [tasks.build]
-run = "go build -o bin/railpack cmd/cli/main.go"
+run = "go build -o bin/instantpack cmd/cli/main.go"
 
 [tasks.clean]
 run = [
@@ -151,7 +151,7 @@ if [ "${usage_local:-false}" = "true" ]; then
   mise run image-builder-build
   image="railpack-builder:local"
 else
-  image="ghcr.io/railwayapp/railpack-builder:mise-$RAILPACK_MISE_VERSION"
+  image="ghcr.io/instant-rw/instantpack-builder:mise-$RAILPACK_MISE_VERSION"
 fi
 exec docker run -it --rm "$image" bash
 '''

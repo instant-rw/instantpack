@@ -6,6 +6,7 @@ import (
 
 	semver "github.com/Masterminds/semver/v3"
 	"github.com/charmbracelet/log"
+	"github.com/railwayapp/railpack/core/app"
 	"github.com/railwayapp/railpack/core/generate"
 	"github.com/railwayapp/railpack/core/plan"
 )
@@ -169,12 +170,20 @@ func (p PackageManager) installDeps(ctx *generate.GenerateContext, install *gene
 			install.AddCommand(plan.NewExecCommand("pnpm install"))
 		}
 	case PackageManagerBun:
-		install.AddCommand(plan.NewExecCommand("bun install --frozen-lockfile"))
+		install.AddCommand(plan.NewExecCommand(bunInstallCommand(ctx.Env)))
 	case PackageManagerYarn1:
 		install.AddCommand(plan.NewExecCommand("yarn install --frozen-lockfile"))
 	case PackageManagerYarnBerry:
 		install.AddCommand(plan.NewExecCommand("yarn install --check-cache"))
 	}
+}
+
+func bunInstallCommand(env *app.Environment) string {
+	if env != nil && env.IsConfigVariableTruthy("BUN_NO_FROZEN_LOCKFILE") {
+		return "bun install"
+	}
+
+	return "bun install --frozen-lockfile"
 }
 
 // pnpm < 11 used PNPM_HOME for bins; pnpm 11+ uses a "bin" subdirectory within PNPM_HOME

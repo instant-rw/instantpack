@@ -21,27 +21,26 @@ import (
 	"github.com/moby/buildkit/util/appcontext"
 	_ "github.com/moby/buildkit/util/grpcutil/encoding/proto"
 	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/railwayapp/railpack/core/branding"
 	"github.com/railwayapp/railpack/core/plan"
 	"github.com/tonistiigi/fsutil"
 )
 
-const (
-	buildkitHostNotSetError = `BUILDKIT_HOST environment variable is not set.
+const buildkitHostNotSetError = `BUILDKIT_HOST environment variable is not set.
 
 To start a local BuildKit daemon and set the environment variable run:
 
 	docker run --rm --privileged -d --name buildkit moby/buildkit
 	export BUILDKIT_HOST='docker-container://buildkit'`
 
-	buildkitInfoError = `failed to get buildkit information.
+var buildkitInfoError = fmt.Sprintf(`failed to get buildkit information.
 
 Most likely the $BUILDKIT_HOST is not running. Here's an example of how to start the build container:
 
 	docker run --rm --privileged -d --name buildkit moby/buildkit
 
-Use 'railpack --verbose' to view more error details.
-		`
-)
+Use '%s --verbose' to view more error details.
+`, branding.BinaryName)
 
 type BuildWithBuildkitClientOptions struct {
 	ImageName    string
@@ -277,7 +276,7 @@ func getImageName(appDir string) string {
 	parts := strings.Split(appDir, string(os.PathSeparator))
 	name := parts[len(parts)-1]
 	if name == "" {
-		name = "railpack-app" // Fallback if path ends in separator
+		name = branding.DefaultAppImageName() // Fallback if path ends in separator
 	}
 	// Docker requires image names to be lowercase
 	return strings.ToLower(name)

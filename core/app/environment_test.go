@@ -24,5 +24,10 @@ func TestFromEnvs(t *testing.T) {
 	require.Equal(t, env.GetVariable("COMMA"), "this has, a comma")
 	require.Equal(t, env.IsConfigVariableTruthy("TRUTHY_CASE"), true)
 	require.Equal(t, env.IsConfigVariableTruthy("TRUTHY_INT_CASE"), true)
+
+	instantpackEnv := NewEnvironment(&map[string]string{
+		"INSTANTPACK_BUN_NO_FROZEN_LOCKFILE": "true",
+	})
+	require.True(t, instantpackEnv.IsConfigVariableTruthy("BUN_NO_FROZEN_LOCKFILE"))
 	require.Equal(t, env.GetVariable("HELLO+WORLD"), "boop")
 }

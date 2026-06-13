@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	a "github.com/railwayapp/railpack/core/app"
+	"github.com/railwayapp/railpack/core/branding"
 	"github.com/railwayapp/railpack/core/mise"
 	"github.com/railwayapp/railpack/core/plan"
 	"github.com/railwayapp/railpack/core/resolver"
@@ -23,7 +24,7 @@ const (
 )
 
 var (
-	RailpackBuilderImage = fmt.Sprintf("ghcr.io/railwayapp/railpack-builder:mise-%s", mise.Version)
+	RailpackBuilderImage = branding.BuilderImage(mise.Version)
 )
 
 // represents a app-local mise package

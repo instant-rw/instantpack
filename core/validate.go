@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/railwayapp/railpack/core/app"
+	"github.com/railwayapp/railpack/core/branding"
 	"github.com/railwayapp/railpack/core/logger"
 	"github.com/railwayapp/railpack/core/plan"
 	"github.com/railwayapp/railpack/core/providers"
@@ -56,7 +57,7 @@ func validateStartCommand(plan *plan.BuildPlan, logger *logger.Logger, options *
 		return true
 	}
 
-	msg := "No start command detected. Specify a start command: https://railpack.com/config/file"
+	msg := fmt.Sprintf("No start command detected. Specify a start command: %s", branding.ConfigDocsURL)
 	if options.ProviderToUse != nil {
 		if providerHelp := options.ProviderToUse.StartCommandHelp(); providerHelp != "" {
 			msg += "\n\n" + providerHelp
@@ -136,16 +137,16 @@ func getNoProviderError(app *app.App) string {
 	}
 
 	var errorMsg strings.Builder
-	errorMsg.WriteString("Railpack could not determine how to build the app.\n\n")
+	errorMsg.WriteString(fmt.Sprintf("%s could not determine how to build the app.\n\n", branding.DisplayName()))
 	errorMsg.WriteString("The following languages are supported:\n")
 	for _, provider := range providerNames {
 		fmt.Fprintf(&errorMsg, "- %s\n", provider)
 	}
 
-	errorMsg.WriteString("\nThe app contents that Railpack analyzed contains:\n\n")
+	errorMsg.WriteString(fmt.Sprintf("\nThe app contents that %s analyzed contains:\n\n", branding.DisplayName()))
 	errorMsg.WriteString(fileTree.String())
 	errorMsg.WriteString("\n")
-	errorMsg.WriteString("Check out the docs for more information: https://railpack.com")
+	errorMsg.WriteString(fmt.Sprintf("Check out the docs for more information: %s", branding.DocsURL))
 
 	return errorMsg.String()
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/muesli/termenv"
 	"github.com/railwayapp/railpack/cli"
+	"github.com/railwayapp/railpack/core/branding"
 	urfave "github.com/urfave/cli/v3"
 )
 
@@ -50,7 +51,7 @@ func main() {
 	}
 
 	cmd := &urfave.Command{
-		Name:                  "railpack",
+		Name:                  branding.BinaryName,
 		Usage:                 "Automatically analyze and generate build plans for applications",
 		EnableShellCompletion: true,
 		ConfigureShellCompletionCommand: func(c *urfave.Command) {
@@ -61,7 +62,7 @@ func main() {
 			&urfave.BoolFlag{
 				Name:        "verbose",
 				Usage:       "Enable verbose logging",
-				Sources:     urfave.EnvVars("RAILPACK_VERBOSE"),
+				Sources:     urfave.EnvVars(branding.VerboseEnvVars()...),
 				Value:       false,
 				Destination: &verbose,
 			},

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # Repository configuration
-REPO_OWNER="railwayapp"
-REPO_NAME="railpack"
+REPO_OWNER="instant-rw"
+REPO_NAME="instantpack"
 REPO_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}"
 
 help_text="Options
@@ -26,7 +26,7 @@ help_text="Options
    Override the base URL used for downloading releases
 
    -r, --remove
-   Uninstall railpack
+   Uninstall instantpack
 
    -h, --help
    Get some help
@@ -122,7 +122,7 @@ download() {
 
   error "Command failed (exit code $rc): ${BLUE}${cmd}${NO_COLOR}"
   printf "\n" >&2
-  info "This is likely due to railpack not yet supporting your configuration."
+  info "This is likely due to instantpack not yet supporting your configuration."
   info "If you would like to see a build for your configuration,"
   info "please create an issue requesting a build for ${MAGENTA}${TARGET}${NO_COLOR}:"
   info "${BOLD}${UNDERLINE}${REPO_URL}/issues/new/${NO_COLOR}"
@@ -176,12 +176,12 @@ install() {
 
   if test_writeable "${BIN_DIR}"; then
     sudo=""
-    msg="Installing railpack, please wait…"
+    msg="Installing instantpack, please wait…"
   else
     warn "Escalated permissions are required to install to ${BIN_DIR}"
     elevate_priv
     sudo="sudo"
-    msg="Installing railpack as root, please wait…"
+    msg="Installing instantpack as root, please wait…"
   fi
   info "$msg"
 
@@ -413,26 +413,26 @@ else
 fi
 
 if [ $UNINSTALL == 1 ]; then
-  confirm "Are you sure you want to uninstall railpack?"
+  confirm "Are you sure you want to uninstall instantpack?"
 
   msg=""
   sudo=""
 
   if test_writeable "$(dirname "$(which ${REPO_NAME})")"; then
     sudo=""
-    msg="Removing railpack, please wait…"
+    msg="Removing instantpack, please wait…"
   else
     warn "Escalated permissions are required to install to ${BIN_DIR}"
     elevate_priv
     sudo="sudo"
-    msg="Removing railpack as root, please wait…"
+    msg="Removing instantpack as root, please wait…"
   fi
 
   info "$msg"
   ${sudo} rm -f "$(which ${REPO_NAME})"
   ${sudo} rm -rf /tmp/${REPO_NAME}
 
-  info "Removed railpack"
+  info "Removed instantpack"
   exit 0
 fi
 
@@ -464,7 +464,7 @@ fi
 
 URL="${BASE_URL}/download/v${RAILPACK_VERSION}/${REPO_NAME}-v${RAILPACK_VERSION}-${TARGET}.${EXT}"
 debug "Tarball URL: ${UNDERLINE}${BLUE}${URL}${NO_COLOR}"
-confirm "Install railpack ${GREEN}${RAILPACK_VERSION}${NO_COLOR} to ${BOLD}${GREEN}${BIN_DIR}${NO_COLOR}?"
+confirm "Install instantpack ${GREEN}${RAILPACK_VERSION}${NO_COLOR} to ${BOLD}${GREEN}${BIN_DIR}${NO_COLOR}?"
 check_bin_dir "${BIN_DIR}"
 
 install "${EXT}"
@@ -472,15 +472,15 @@ install "${EXT}"
 printf "$GREEN"
 cat <<'EOF'
 
-   ____       _ _                  _
-  |  _ \ __ _(_) |_ __   __ _  ___| | __
-  | |_) / _` | | | '_ \ / _` |/ __| |/ /
-  |  _ < (_| | | | |_) | (_| | (__|   <
-  |_| \_\__,_|_|_| .__/ \__,_|\___|_|\_\
-                  |_|
+   ___           _             _                    _
+  |_ _|_ __  ___| |_ __ _ _ __| |_ _ __   __ _  ___| | __
+   | || '_ \/ __| __/ _` | '__| __| '_ \ / _` |/ __| |/ /
+   | || | | \__ \ || (_| | |  | |_| |_) | (_| | (__|   <
+  |___|_| |_|___/\__\__,_|_|   \__| .__/ \__,_|\___|_|\_\
+                                  |_|
 
-  Railpack is now installed!
-  Run 'railpack --help' to get started
+  Instantpack is now installed!
+  Run 'instantpack --help' to get started
 
 EOF
 printf "$NO_COLOR"

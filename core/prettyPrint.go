@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/railwayapp/railpack/core/branding"
 	"github.com/railwayapp/railpack/core/logger"
 	"github.com/railwayapp/railpack/core/plan"
 	"github.com/railwayapp/railpack/core/resolver"
@@ -123,7 +124,7 @@ func FormatBuildResult(br *BuildResult, options ...PrintOptions) string {
 }
 
 func formatHeader(output *strings.Builder, version string) {
-	header := fmt.Sprintf("Railpack %s", version)
+	header := branding.CLIHeader(version)
 	output.WriteString(headerStyle.Render(header))
 	output.WriteString("\n")
 }

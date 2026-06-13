@@ -9,7 +9,7 @@ before:
 builds:
   - id: cli
     main: ./cmd/cli
-    binary: railpack
+    binary: instantpack
     env:
       - CGO_ENABLED=0
     goos:
@@ -37,8 +37,8 @@ archives:
       - goos: windows
         formats: [zip]
 
-# build a multi-arch railpack frontend image to be used by buildkit to convert a repo (and any railpack.json) into docker llb
-# the railpack build and runtime images are created separately. This image bundles the freshly compiled railpack binary
+# build a multi-arch instantpack frontend image to be used by buildkit to convert a repo (and any railpack.json) into docker llb
+# the instantpack build and runtime images are created separately. This image bundles the freshly compiled instantpack binary
 # which is why we build the images here instead of GHA.
 dockers:
   - image_templates:

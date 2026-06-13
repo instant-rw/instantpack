@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/railwayapp/railpack/core/branding"
 	"github.com/railwayapp/railpack/core/plan"
 )
 
@@ -90,7 +91,7 @@ func (g *BuildGraph) getMergeState(layers []plan.Layer) llb.State {
 		mergeNames = append(mergeNames, input.DisplayName())
 	}
 
-	return llb.Merge(mergeStates, llb.WithCustomNamef("[railpack] merge %s", strings.Join(mergeNames, ", ")))
+	return llb.Merge(mergeStates, llb.WithCustomNamef(branding.BuildKitLabel("merge %s"), strings.Join(mergeNames, ", ")))
 }
 
 // copyLayerPaths copies paths from srcState to destState, applying the given filter.

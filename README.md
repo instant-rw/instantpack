@@ -1,46 +1,52 @@
-# Railpack
+# Instantpack
 
-[![CI](https://github.com/railwayapp/railpack/actions/workflows/unit-tests.yml/badge.svg)](https://github.com/railwayapp/railpack/actions/workflows/unit-tests.yml)
-[![Run Tests](https://github.com/railwayapp/railpack/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/railwayapp/railpack/actions/workflows/integration-tests.yml)
+Instantpack is a fork of [Railpack](https://github.com/railwayapp/railpack) maintained for Instant deployments. It keeps upstream compatibility for config files and build plans while branding output and images as Instantpack.
 
-Railpack is a tool for building images from source code with minimal
-configuration. It is the successor to [Nixpacks](https://nixpacks.com) and
-incorporates many of the learnings from running Nixpacks in production at
-[Railway](https://railway.com) for several years.
+## Images
 
-## Getting Started
+Release images are published to GitHub Container Registry:
+
+- `ghcr.io/instant-rw/instantpack-builder`
+- `ghcr.io/instant-rw/instantpack-runtime`
+- `ghcr.io/instant-rw/instantpack-frontend`
+
+## Local development
 
 ```bash
-# Install mise & railpack
-curl -sSL https://mise.run | sh
-mise install github:railwayapp/railpack@latest
+# Install mise & instantpack
+mise trust
+mise install
 
-# start BuildKit container & let railpack know about it
+# Build the CLI
+mise run build
+
+# Start BuildKit and build a project
 docker run --rm --privileged -d --name buildkit moby/buildkit
 export BUILDKIT_HOST='docker-container://buildkit'
 
-# create a Next.js app
-npm create next-app@latest my-app
-cd my-app
-
-# build and run the app!
-railpack build .
-docker run -p 3000:3000 -it my-app
+./bin/instantpack build .
 ```
 
-Railpack automatically detects the project type (Next.js, in this case, but many languages & frameworks are supported!) and generates an optimized
-container image.
+## Configuration
 
-**Note:** The above steps are for running Railpack locally to experiment and
-test. If you deploy on [Railway](https://railway.com), Railpack
-runs automatically when you push changes to your repository.
+Instantpack keeps upstream `railpack.json` compatibility. Environment variables accept both `INSTANTPACK_*` and legacy `RAILPACK_*` prefixes.
 
-## Documentation
+To bypass Bun's `--frozen-lockfile` during install (useful when lockfiles are out of sync):
 
-Full documentation for both operators (platforms, like Railway) and users (developers using Railpack to build their applications) is available at
-[railpack.com](https://railpack.com).
+```bash
+export INSTANTPACK_BUN_NO_FROZEN_LOCKFILE=true
+```
 
-## Contributing
+## Release
 
-Railpack is open source and open to contributions. See the
-[CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
+Push a version tag to trigger the GitHub Actions release workflow:
+
+```bash
+./scripts/release-instantpack.sh v0.1.0
+```
+
+This publishes CLI binaries and the GHCR images above.
+
+## Upstream
+
+Instantpack tracks [railwayapp/railpack](https://github.com/railwayapp/railpack). Upstream docs remain useful for build plan behavior: [railpack.com](https://railpack.com).

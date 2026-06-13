@@ -5,12 +5,11 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"github.com/railwayapp/railpack/core/branding"
 	"github.com/railwayapp/railpack/core/mise"
 )
 
-const (
-	DefaultSource = "railpack default"
-)
+var DefaultSource = branding.DefaultPackageSource()
 
 type Resolver struct {
 	mise             *mise.Mise

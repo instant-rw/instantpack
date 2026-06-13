@@ -3,15 +3,17 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 
+	"github.com/railwayapp/railpack/core/branding"
 	"github.com/railwayapp/railpack/core/config"
 	"github.com/urfave/cli/v3"
 )
 
 var SchemaCommand = &cli.Command{
 	Name:                  "schema",
-	Usage:                 "outputs the JSON schema for the Railpack config",
+	Usage:                 fmt.Sprintf("outputs the JSON schema for the %s config", branding.DisplayName()),
 	EnableShellCompletion: true,
 	Flags:                 []cli.Flag{},
 	Action: func(ctx context.Context, cmd *cli.Command) error {
