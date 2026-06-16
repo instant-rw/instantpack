@@ -58,7 +58,7 @@ info() {
 }
 
 debug() {
-  if [[ -n "${VERBOSE}" ]]; then
+  if [ -n "${VERBOSE}" ]; then
     printf '%s\n' "${BOLD}${GREY}>${NO_COLOR} $*"
   fi
 }
@@ -136,13 +136,11 @@ unpack() {
 
   case "$archive" in
     *.tar.gz)
-      flags=$(test -n)
-      ${sudo} tar "${flags}" -xzf "${archive}" -C "${bin_dir}"
+      ${sudo} tar -xzf "${archive}" -C "${bin_dir}"
       return 0
       ;;
     *.zip)
-      flags=$(test -z)
-      UNZIP="${flags}" ${sudo} unzip "${archive}" -d "${bin_dir}"
+      ${sudo} unzip -o "${archive}" -d "${bin_dir}"
       return 0
       ;;
   esac
@@ -412,7 +410,7 @@ else
   VERBOSE=
 fi
 
-if [ $UNINSTALL == 1 ]; then
+if [ "$UNINSTALL" -eq 1 ]; then
   confirm "Are you sure you want to uninstall instantpack?"
 
   msg=""
@@ -436,7 +434,7 @@ if [ $UNINSTALL == 1 ]; then
   exit 0
 fi
 
-if [ $HELP == 1 ]; then
+if [ "$HELP" -eq 1 ]; then
     echo "${help_text}"
     exit 0
 fi
@@ -445,7 +443,7 @@ TARGET="$(detect_target "${ARCH}" "${PLATFORM}")"
 is_build_available "${ARCH}" "${PLATFORM}" "${TARGET}"
 
 print_configuration () {
-  if [[ -n "${VERBOSE}" ]]; then
+  if [ -n "${VERBOSE}" ]; then
     printf "  %s\n" "${UNDERLINE}Configuration${NO_COLOR}"
     debug "${BOLD}Bin directory${NO_COLOR}: ${GREEN}${BIN_DIR}${NO_COLOR}"
     debug "${BOLD}Platform${NO_COLOR}:      ${GREEN}${PLATFORM}${NO_COLOR}"
