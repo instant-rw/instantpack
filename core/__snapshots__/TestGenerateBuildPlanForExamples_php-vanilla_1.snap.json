@@ -3,7 +3,10 @@
   "base": {
    "step": "build"
   },
-  "startCommand": "/start-container.sh"
+  "startCommand": "/start-container.sh",
+  "variables": {
+   "RAILPACK_VERSION": "dev"
+  }
  },
  "steps": [
   {
@@ -15,7 +18,7 @@
    ],
    "inputs": [
     {
-     "image": "dunglas/frankenphp:php8.4.22-bookworm"
+     "image": "dunglas/frankenphp:php8.4.24-trixie"
     }
    ],
    "name": "packages:image"
