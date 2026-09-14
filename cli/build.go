@@ -14,6 +14,8 @@ import (
 	"github.com/railwayapp/railpack/buildkit"
 	"github.com/railwayapp/railpack/core"
 	"github.com/railwayapp/railpack/core/app"
+	"github.com/railwayapp/railpack/core/branding"
+	"github.com/railwayapp/railpack/core/generate"
 	"github.com/railwayapp/railpack/core/plan"
 	"github.com/urfave/cli/v3"
 )
@@ -65,12 +67,31 @@ var BuildCommand = &cli.Command{
 			Value: false,
 		},
 		&cli.BoolFlag{
+			Name:  "push",
+			Usage: "push the image straight to its registry instead of loading it into the local Docker daemon",
+			Value: false,
+		},
+		&cli.StringFlag{
+			Name:  "builder-image",
+			Usage: "override the build-time base image (default ghcr.io/instant-rw/instantpack-builder:mise-<version>)",
+		},
+		&cli.StringFlag{
+			Name:  "runtime-image",
+			Usage: "override the runtime base image (default ghcr.io/instant-rw/instantpack-runtime:mise-<version>)",
+		},
+		&cli.BoolFlag{
+			Name:  "insecure-registry",
+			Usage: "allow plain HTTP / self-signed registries when pushing or exporting cache",
+			Value: false,
+		},
+		&cli.BoolFlag{
 			Name:   "dump-llb",
 			Hidden: true,
 			Value:  false,
 		},
 	}, commonPlanFlags()...),
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		applyBaseImageOverrides(cmd.String("builder-image"), cmd.String("runtime-image"))
 		buildResult, app, env, err := GenerateBuildResultForCommand(cmd)
 		if err != nil {
 			return cli.Exit(err, exitCodeForError(err))
@@ -122,6 +143,9 @@ var BuildCommand = &cli.Command{
 			Platform:    platformStr,
 			GitHubToken: os.Getenv("GITHUB_TOKEN"),
 			NoCache:     cmd.Bool("no-cache"),
+			Push:        cmd.Bool("push"),
+			// Plain HTTP registries are only used by local Instant Cloud fleets
+			InsecureRegistry: cmd.Bool("insecure-registry"),
 		})
 		if err != nil {
 			return cli.Exit(err, ExitCodeFailure)
@@ -150,4 +174,25 @@ func getSecretsHash(env *app.Environment) string {
 	hasher := sha256.New()
 	hasher.Write([]byte(secretsValue.String()))
 	return fmt.Sprintf("%x", hasher.Sum(nil))
+}
+
+// applyBaseImageOverrides lets operators pin the builder/runtime base images
+// independently of the mise version compiled into this binary. Flags win over
+// INSTANTPACK_*_IMAGE / RAILPACK_*_IMAGE environment variables.
+func applyBaseImageOverrides(builderFlag, runtimeFlag string) {
+	if image := firstNonEmpty(builderFlag, os.Getenv(branding.ConfigEnv("BUILDER_IMAGE")), os.Getenv(branding.LegacyConfigEnv("BUILDER_IMAGE"))); image != "" {
+		generate.RailpackBuilderImage = image
+	}
+	if image := firstNonEmpty(runtimeFlag, os.Getenv(branding.ConfigEnv("RUNTIME_IMAGE")), os.Getenv(branding.LegacyConfigEnv("RUNTIME_IMAGE"))); image != "" {
+		plan.RailpackRuntimeImage = image
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

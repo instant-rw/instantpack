@@ -62,6 +62,10 @@ type BuildWithBuildkitClientOptions struct {
 	CacheKey     string
 	GitHubToken  string
 	NoCache      bool
+	// Push exports the image directly to its registry (no docker load, no Docker socket needed)
+	Push bool
+	// InsecureRegistry marks the registry as plain HTTP / untrusted TLS for push and cache export
+	InsecureRegistry bool
 }
 
 func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWithBuildkitClientOptions) error {
@@ -136,8 +140,8 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 	var pipeW *io.PipeWriter
 	errCh := make(chan error, 1)
 
-	// Only set up pipe and docker load if we're not saving to a directory
-	if opts.OutputDir == "" {
+	// Only set up pipe and docker load if we're not saving to a directory or pushing
+	if opts.OutputDir == "" && !opts.Push {
 		// Create a pipe to connect buildkit output to docker load
 		pipeR, pipeW = io.Pipe()
 		defer func() { _ = pipeR.Close() }()
@@ -209,22 +213,11 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 			"context": appFS,
 		},
 		Session: sessionAttachables,
-		Exports: []client.ExportEntry{
-			{
-				Type: client.ExporterDocker,
-				Attrs: map[string]string{
-					"name":                  imageName,
-					"containerimage.config": string(imageBytes),
-				},
-				Output: func(_ map[string]string) (io.WriteCloser, error) {
-					return pipeW, nil
-				},
-			},
-		},
+		Exports: exportEntries(opts, imageName, string(imageBytes), pipeW),
 	}
 
-	solveOpts.CacheImports = cacheEntriesFromFlags(opts.ImportCache)
-	solveOpts.CacheExports = cacheEntriesFromFlags(opts.ExportCache)
+	solveOpts.CacheImports = withRegistryInsecure(cacheEntriesFromFlags(opts.ImportCache), opts.InsecureRegistry)
+	solveOpts.CacheExports = withRegistryInsecure(cacheEntriesFromFlags(opts.ExportCache), opts.InsecureRegistry)
 
 	log.Infof("cache imports: %v", solveOpts.CacheImports)
 	log.Infof("cache exports: %v", solveOpts.CacheExports)
@@ -234,13 +227,6 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 		err = os.MkdirAll(opts.OutputDir, 0755)
 		if err != nil {
 			return fmt.Errorf("error creating output directory: %w", err)
-		}
-
-		solveOpts.Exports = []client.ExportEntry{
-			{
-				Type:      client.ExporterLocal,
-				OutputDir: opts.OutputDir,
-			},
 		}
 	}
 
@@ -259,7 +245,7 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 	}
 
 	// Only wait for docker load if we used it
-	if opts.OutputDir == "" {
+	if opts.OutputDir == "" && !opts.Push {
 		if err := <-errCh; err != nil {
 			return fmt.Errorf("docker load failed: %w", err)
 		}
@@ -270,6 +256,8 @@ func BuildWithBuildkitClient(appDir string, plan *plan.BuildPlan, opts BuildWith
 	buildOutput := fmt.Sprintf("Successfully built image in %.2fs", buildDuration.Seconds())
 	if opts.OutputDir != "" {
 		buildOutput += fmt.Sprintf("\n\nSaved to:\n%s", core.FormatHighlight(opts.OutputDir))
+	} else if opts.Push {
+		buildOutput += fmt.Sprintf("\n\nPushed:\n%s", core.FormatHighlight(imageName))
 	} else {
 		command := fmt.Sprintf("docker run -it %s", imageName)
 		buildOutput += fmt.Sprintf("\n\nRun:\n%s", core.FormatHighlight(command))
@@ -336,4 +324,50 @@ func extractCacheType(attrs map[string]string) (string, map[string]string) {
 	delete(cleanedAttrs, "type")
 
 	return cacheType, cleanedAttrs
+}
+
+// exportEntries picks the BuildKit exporter: push straight to the registry,
+// write a directory, or stream a docker tarball into `docker load`.
+func exportEntries(opts BuildWithBuildkitClientOptions, imageName, imageConfig string, pipeW io.WriteCloser) []client.ExportEntry {
+	if opts.OutputDir != "" {
+		return []client.ExportEntry{{Type: client.ExporterLocal, OutputDir: opts.OutputDir}}
+	}
+	if opts.Push {
+		attrs := map[string]string{
+			"name":                  imageName,
+			"push":                  "true",
+			"containerimage.config": imageConfig,
+		}
+		if opts.InsecureRegistry {
+			attrs["registry.insecure"] = "true"
+		}
+		return []client.ExportEntry{{Type: client.ExporterImage, Attrs: attrs}}
+	}
+	return []client.ExportEntry{{
+		Type: client.ExporterDocker,
+		Attrs: map[string]string{
+			"name":                  imageName,
+			"containerimage.config": imageConfig,
+		},
+		Output: func(_ map[string]string) (io.WriteCloser, error) {
+			return pipeW, nil
+		},
+	}}
+}
+
+// withRegistryInsecure propagates --insecure-registry to registry cache entries.
+func withRegistryInsecure(entries []client.CacheOptionsEntry, insecure bool) []client.CacheOptionsEntry {
+	if !insecure {
+		return entries
+	}
+	for i := range entries {
+		if entries[i].Type != "registry" {
+			continue
+		}
+		if entries[i].Attrs == nil {
+			entries[i].Attrs = map[string]string{}
+		}
+		entries[i].Attrs["registry.insecure"] = "true"
+	}
+	return entries
 }
