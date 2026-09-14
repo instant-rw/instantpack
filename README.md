@@ -27,6 +27,14 @@ export BUILDKIT_HOST='docker-container://buildkit'
 ./bin/instantpack build .
 ```
 
+## Pushing straight to a registry
+
+`instantpack build DIR --name registry.example.com/app:sha --push` exports the image
+from BuildKit directly into the registry (no `docker load`, no Docker socket). Add
+`--insecure-registry` for plain HTTP registries such as a local development registry.
+Credentials come from the standard Docker config (`DOCKER_CONFIG`). Instant Cloud build
+nodes use this mode; `--cache-from`/`--cache-to` registry caches honour the same flag.
+
 ## Configuration
 
 Instantpack keeps upstream `railpack.json` compatibility. Environment variables accept both `INSTANTPACK_*` and legacy `RAILPACK_*` prefixes.

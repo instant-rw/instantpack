@@ -193,3 +193,33 @@ func TestCacheEntriesFromFlags(t *testing.T) {
 		}, got)
 	})
 }
+
+func TestExportEntriesPushAndInsecure(t *testing.T) {
+	entries := exportEntries(BuildWithBuildkitClientOptions{Push: true, InsecureRegistry: true}, "10.0.0.5:7500/app:abc", "{}", nil)
+	require.Len(t, entries, 1)
+	require.Equal(t, client.ExporterImage, entries[0].Type)
+	require.Equal(t, "true", entries[0].Attrs["push"])
+	require.Equal(t, "true", entries[0].Attrs["registry.insecure"])
+	require.Equal(t, "10.0.0.5:7500/app:abc", entries[0].Attrs["name"])
+	require.Nil(t, entries[0].Output)
+
+	secure := exportEntries(BuildWithBuildkitClientOptions{Push: true}, "ghcr.io/x/app:1", "{}", nil)
+	_, hasInsecure := secure[0].Attrs["registry.insecure"]
+	require.False(t, hasInsecure)
+
+	local := exportEntries(BuildWithBuildkitClientOptions{OutputDir: "/tmp/out"}, "x", "{}", nil)
+	require.Equal(t, client.ExporterLocal, local[0].Type)
+
+	docker := exportEntries(BuildWithBuildkitClientOptions{}, "x", "{}", nil)
+	require.Equal(t, client.ExporterDocker, docker[0].Type)
+	require.NotNil(t, docker[0].Output)
+}
+
+func TestWithRegistryInsecure(t *testing.T) {
+	entries := cacheEntriesFromFlags([]string{"type=registry,ref=10.0.0.5:7500/app:cache,mode=max", "type=local,dest=/tmp/c"})
+	entries = withRegistryInsecure(entries, true)
+	require.Equal(t, "true", entries[0].Attrs["registry.insecure"])
+	_, local := entries[1].Attrs["registry.insecure"]
+	require.False(t, local)
+	require.Equal(t, "max", entries[0].Attrs["mode"])
+}
