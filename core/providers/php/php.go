@@ -91,7 +91,7 @@ func (p *PhpProvider) Plan(ctx *generate.GenerateContext) error {
 		// A manual build command will go here
 		build := ctx.NewCommandStep("build")
 		build.AddInput(plan.NewStepLayer(composer.Name()))
-		build.AddInput(ctx.NewLocalLayer())
+		build.AddInput(plan.NewLocalLayer())
 		ctx.Deploy.Base = plan.NewStepLayer(build.Name())
 		p.ConditionallyIncludeMise(ctx)
 	}
@@ -236,7 +236,7 @@ func (p *PhpProvider) DeployWithNode(ctx *generate.GenerateContext, nodeProvider
 
 // Include mise and packages in the final image if the user has specified any additional packages
 func (p *PhpProvider) ConditionallyIncludeMise(ctx *generate.GenerateContext) {
-	if len(ctx.GetMiseStepBuilder().MisePackages) > 1 {
+	if len(ctx.GetMiseStepBuilder().MisePackages) >= 1 {
 		ctx.Deploy.AddInputs([]plan.Layer{
 			ctx.GetMiseStepBuilder().GetLayer(),
 		})
@@ -429,10 +429,10 @@ func (p *PhpProvider) phpImagePackage(ctx *generate.GenerateContext) (*generate.
 	imageStep.SetVersionAvailable(php, func(version string) bool {
 		image := getPhpImage(version)
 
-		// dunglas/frankenphp:php8.4.3-bookworm -> [dunglas, frankenphp, php8.4.3-bookworm]
+		// dunglas/frankenphp:php8.4.3-trixie -> [dunglas, frankenphp, php8.4.3-trixie]
 		parts := strings.Split(image, ":")
 		repository := parts[0] // dunglas/frankenphp
-		tag := parts[1]        // php8.4.3-bookworm
+		tag := parts[1]        // php8.4.3-trixie
 
 		url := fmt.Sprintf("https://registry.hub.docker.com/v2/repositories/%s/tags/%s", repository, tag)
 		resp, err := http.Get(url)
@@ -447,7 +447,7 @@ func (p *PhpProvider) phpImagePackage(ctx *generate.GenerateContext) (*generate.
 }
 
 func getPhpImage(phpVersion string) string {
-	return fmt.Sprintf("dunglas/frankenphp:php%s-bookworm", phpVersion)
+	return fmt.Sprintf("dunglas/frankenphp:php%s-trixie", phpVersion)
 }
 
 func (p *PhpProvider) readComposerJson(ctx *generate.GenerateContext) (map[string]any, error) {

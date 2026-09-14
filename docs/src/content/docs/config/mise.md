@@ -48,7 +48,8 @@ into the build. This includes:
   `.config/mise/conf.d/*.toml`
 - **Idiomatic version files**: `.ruby-version`, `.python-version`,
   `.python-versions`, `.node-version`, `.nvmrc`, `.go-version`,
-  `.java-version`, `.sdkmanrc`, `.bun-version`, `.yvmrc`
+  `.java-version`, `.sdkmanrc`, `.deno-version`, `rust-toolchain.toml`,
+  `.bun-version`, `.yvmrc`, `global.json`
 - **Lock files**: `mise.lock` files co-located with any detected
   `*.toml` config
 
@@ -57,7 +58,7 @@ into the build. This includes:
 To opt-in to non-default features like precompiled Ruby, add a
 `mise.toml` to your repository:
 
-```toml
+```toml title="mise.toml"
 [tools]
 ruby = "3"
 
