@@ -65,6 +65,9 @@
    "YARN_PRODUCTION": "false"
   }
  },
+ "exclude": [
+  "node_modules"
+ ],
  "steps": [
   {
    "caches": [
@@ -79,7 +82,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.10.15"
     }
    ],
    "name": "packages:apt:build"
@@ -202,7 +205,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.10.15"
     }
    ],
    "name": "packages:apt:runtime"

@@ -28,10 +28,11 @@ type StepBuilder interface {
 }
 
 type GenerateContext struct {
-	App             *a.App
-	Env             *a.Environment
-	Config          *config.Config
-	dockerignoreCtx *plan.DockerignoreContext
+	App                     *a.App
+	Env                     *a.Environment
+	Config                  *config.Config
+	dockerignoreCtx         *plan.DockerignoreContext
+	providerDefaultExcludes []string
 
 	BaseImage string
 	Steps     []StepBuilder
@@ -81,6 +82,14 @@ func NewGenerateContext(app *a.App, env *a.Environment, config *config.Config, l
 		log.Debugf("Dockerignore patterns: %v", dockerignoreCtx.Excludes)
 	}
 
+	// Later patterns win, so an entry in one list can undo a pattern from the other.
+	if len(dockerignoreCtx.Excludes) > 0 && len(config.Exclude) > 0 {
+		logger.LogSuggestion(
+			"Use either `.dockerignore` or `railpack.json` `exclude`. These lists are merged and can negate each other",
+			"/config/recommendations#pick-one-ignore-approach",
+		)
+	}
+
 	ctx := &GenerateContext{
 		App:             app,
 		Env:             env,
@@ -93,6 +102,11 @@ func NewGenerateContext(app *a.App, env *a.Environment, config *config.Config, l
 		Resolver:        resolver,
 		Logger:          logger,
 		dockerignoreCtx: dockerignoreCtx,
+	}
+
+	// Path discovery must not return files that BuildKit will never load.
+	if err := app.SetExcludePatterns(ctx.ExcludePatterns()); err != nil {
+		return nil, err
 	}
 
 	ctx.applyPackagesFromConfig()
@@ -109,6 +123,10 @@ func (c *GenerateContext) GetMiseStepBuilder() *MiseStepBuilder {
 		c.MiseStepBuilder = c.newMiseStepBuilder()
 	}
 	return c.MiseStepBuilder
+}
+
+func (c *GenerateContext) SetProviderDefaultExcludes(excludes []string) {
+	c.providerDefaultExcludes = slices.Clone(excludes)
 }
 
 func (c *GenerateContext) EnterSubContext(subContext string) *GenerateContext {
@@ -154,10 +172,7 @@ func (c *GenerateContext) Generate() (*plan.BuildPlan, map[string]*resolver.Reso
 
 	buildPlan := plan.NewBuildPlan()
 
-	// Merge exclude patterns from .dockerignore and railpack.json
-	excludePatterns := []string{}
-	excludePatterns = append(excludePatterns, c.dockerignoreCtx.Excludes...)
-	excludePatterns = append(excludePatterns, c.Config.Exclude...)
+	excludePatterns := c.getExcludePatterns()
 	if len(excludePatterns) > 0 {
 		buildPlan.Exclude = excludePatterns
 	}
@@ -182,6 +197,33 @@ func (c *GenerateContext) Generate() (*plan.BuildPlan, map[string]*resolver.Reso
 	buildPlan.Normalize()
 
 	return buildPlan, resolvedPackages, nil
+}
+
+func (c *GenerateContext) getExcludePatterns() []string {
+	// .dockerignore comes first so a later railpack.json pattern can negate it.
+	if c.dockerignoreCtx.HasFile || c.Config.Exclude != nil {
+		return slices.Concat(c.dockerignoreCtx.Excludes, c.Config.Exclude)
+	}
+
+	if len(c.providerDefaultExcludes) == 0 {
+		c.Logger.LogSuggestion(
+			"Add a `.dockerignore` file to exclude files from the build",
+			"/config/excluding-files",
+		)
+		return nil
+	}
+
+	formattedExcludes := make([]string, len(c.providerDefaultExcludes))
+	for i, exclude := range c.providerDefaultExcludes {
+		formattedExcludes[i] = fmt.Sprintf("`%s`", exclude)
+	}
+
+	c.Logger.LogSuggestion(
+		fmt.Sprintf("Applying default exclude patterns: %s. Add a `.dockerignore` to customize", strings.Join(formattedExcludes, ", ")),
+		"/config/excluding-files",
+	)
+
+	return slices.Clone(c.providerDefaultExcludes)
 }
 
 func (o *BuildStepOptions) NewAptInstallCommand(pkgs []string) plan.Command {
@@ -284,32 +326,6 @@ func (c *GenerateContext) applyConfig() {
 			c.Deploy.AddInputs([]plan.Layer{plan.NewStepLayer(name, filter)})
 		}
 	}
-
-	c.notifyCustomAptDebianUpgrade()
-}
-
-// TODO(2026-10-17): remove this Debian upgrade notice for custom apt packages.
-func (c *GenerateContext) notifyCustomAptDebianUpgrade() {
-	hasCustom := false
-	for _, pkg := range c.Config.BuildAptPackages {
-		if pkg != "" && pkg != "..." {
-			hasCustom = true
-			break
-		}
-	}
-	if !hasCustom && c.Config.Deploy != nil {
-		for _, pkg := range c.Config.Deploy.AptPackages {
-			if pkg != "" && pkg != "..." {
-				hasCustom = true
-				break
-			}
-		}
-	}
-	if !hasCustom {
-		return
-	}
-
-	c.Logger.LogInfo("The debian base image has been upgraded and you may experience issues with custom apt packages. Report any issues here: https://github.com/railwayapp/railpack/issues")
 }
 
 func (c *GenerateContext) applyBuildAptPackages() {
@@ -349,4 +365,10 @@ func (c *GenerateContext) GetAppSource() string {
 
 func (c *GenerateContext) GetLogger() *logger.Logger {
 	return c.Logger
+}
+
+// Dockerignore patterns come first so a later railpack.json `exclude` entry
+// can negate them. The planner and BuildKit both apply this single list.
+func (c *GenerateContext) ExcludePatterns() []string {
+	return slices.Concat(c.dockerignoreCtx.Excludes, c.Config.Exclude)
 }

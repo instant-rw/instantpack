@@ -1,7 +1,7 @@
 {
  "deploy": {
   "base": {
-   "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.8.6"
+   "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.10.15"
   },
   "inputs": [
    {
@@ -38,6 +38,10 @@
    "RAILPACK_VERSION": "dev"
   }
  },
+ "exclude": [
+  ".venv",
+  "venv"
+ ],
  "steps": [
   {
    "assets": {
@@ -59,7 +63,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.10.15"
     }
    ],
    "name": "packages:mise",

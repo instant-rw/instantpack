@@ -32,6 +32,8 @@ var nodeRuntimeDepRequirements = map[string][]string{
 	"puppeteer": {"xvfb", "libasound2", "libatk1.0-0", "libc6", "libcairo2", "libcups2", "libdbus-1-3", "libexpat1", "libfontconfig1", "libgbm1", "libgcc1", "libgdk-pixbuf-2.0-0", "libglib2.0-0", "libgtk-3-0", "libnspr4", "libpango-1.0-0", "libpangocairo-1.0-0", "libstdc++6", "libx11-6", "libx11-xcb1", "libxcb1", "libxcomposite1", "libxcursor1", "libxdamage1", "libxext6", "libxfixes3", "libxi6", "libxrandr2", "libxrender1", "libxss1", "libxtst6", "ca-certificates", "fonts-liberation", "libnss3", "lsb-release", "xdg-utils", "wget"},
 }
 
+var nodeDefaultExcludePatterns = []string{"node_modules"}
+
 // Keep this aligned with Playwright's Chromium deps in nativeDeps.ts:
 // https://github.com/microsoft/playwright/blob/main/packages/playwright-core/src/server/registry/nativeDeps.ts
 // Keep these explicit because --with-deps installs them in the builder, not the runtime image.
@@ -117,6 +119,8 @@ func (p *NodeProvider) Plan(ctx *generate.GenerateContext) error {
 		return fmt.Errorf("package.json not found")
 	}
 
+	ctx.SetProviderDefaultExcludes(nodeDefaultExcludePatterns)
+
 	p.SetNodeMetadata(ctx)
 
 	ctx.Logger.LogInfo("Using %s package manager", p.packageManager)
@@ -151,12 +155,20 @@ func (p *NodeProvider) Plan(ctx *generate.GenerateContext) error {
 	p.Build(ctx, build)
 
 	// note the best place for it, but it avoids having to worry about side effects in the framework helper functions
-	if p.usesTanstackSrvxFallback() {
-		ctx.Logger.LogInfo("No start script found; using srvx as production server")
-		ctx.Logger.LogSuggestion(
-			"Set up Nitro for production Node deploys",
-			"https://tanstack.com/start/latest/docs/framework/react/guide/hosting#nitro",
-		)
+	if p.usesTanstackStartFallback() {
+		if p.usesTanstackNitro(ctx) {
+			ctx.Logger.LogInfo("No start script found; using the Nitro server at .output/server/index.mjs")
+			ctx.Logger.LogSuggestion(
+				"Add a start script to make the server command explicit",
+				"https://tanstack.com/start/latest/docs/framework/react/guide/hosting#nitro",
+			)
+		} else {
+			ctx.Logger.LogInfo("No start script found; using srvx as production server")
+			ctx.Logger.LogSuggestion(
+				"Set up Nitro for production Node deploys",
+				"https://tanstack.com/start/latest/docs/framework/react/guide/hosting#nitro",
+			)
+		}
 	}
 
 	// Deploy
@@ -221,7 +233,8 @@ func (p *NodeProvider) Plan(ctx *generate.GenerateContext) error {
 
 	buildLayer := plan.NewStepLayer(build.Name(), plan.Filter{
 		Include: buildIncludeDirs,
-		// TODO we should just have a default dockerignore/exclusion list instead of hardcoding here
+		// Dependencies are copied from the install or prune layer separately. Exclude
+		// generated dependencies from build output so they do not replace that layer.
 		Exclude: []string{"node_modules", ".yarn"},
 	})
 
@@ -261,7 +274,7 @@ func (p *NodeProvider) GetStartCommand(ctx *generate.GenerateContext) string {
 	} else if p.isNuxt() {
 		// Default Nuxt start command
 		return "node .output/server/index.mjs"
-	} else if start := p.getTanstackStartCommand(); start != "" {
+	} else if start := p.getTanstackStartCommand(ctx); start != "" {
 		return start
 	} else if start := p.getSvelteKitStartCommand(); start != "" {
 		return start
@@ -324,6 +337,10 @@ func (p *NodeProvider) addFrameworkCaches(ctx *generate.GenerateContext, build *
 func (p *NodeProvider) addCachesToBuildStep(ctx *generate.GenerateContext, build *generate.CommandStepBuilder) {
 	build.AddCache(ctx.Caches.AddCache("node-modules", NODE_MODULES_CACHE))
 
+	if dir := p.turboCacheDir(ctx); dir != "" {
+		build.AddCache(ctx.Caches.AddCache("turbo", dir))
+	}
+
 	p.addFrameworkCaches(ctx, build, "next", func(pkg *WorkspacePackage, ctx *generate.GenerateContext) bool {
 		// Script-based Next apps (including monorepo packages with explicit next build)
 		if pkg.PackageJson.BuildScriptContains("next build") {
@@ -361,6 +378,10 @@ func (p *NodeProvider) shouldPrune(ctx *generate.GenerateContext) bool {
 func (p *NodeProvider) PruneNodeDeps(ctx *generate.GenerateContext, prune *generate.CommandStepBuilder) {
 	ctx.Logger.LogInfo("Pruning node dependencies")
 	prune.Variables["NPM_CONFIG_PRODUCTION"] = "true"
+	if p.packageManager == PackageManagerBun {
+		// Keep symlinks project-local in node_modules across container build layers
+		prune.Variables["BUN_INSTALL_GLOBAL_STORE"] = "0"
+	}
 	prune.Secrets = []string{}
 	p.packageManager.PruneDeps(ctx, prune)
 }
@@ -371,12 +392,6 @@ func (p *NodeProvider) InstallNodeDeps(ctx *generate.GenerateContext, install *g
 	install.Secrets = []string{}
 	install.UseSecretsWithPrefixes([]string{"NODE", "NPM", "BUN", "PNPM", "YARN", "CI"})
 	install.AddPaths([]string{"/app/node_modules/.bin"})
-
-	// TODO once dockerignore is in place, we should remove this
-	if ctx.App.HasMatch("node_modules") {
-		ctx.Logger.LogWarn("node_modules directory found in project root, this is likely a mistake")
-		ctx.Logger.LogWarn("It is recommended to add node_modules to the .gitignore file")
-	}
 
 	if p.usesCorepack() {
 		pmName, pmVersion := p.packageJson.GetPackageManagerInfo()
@@ -498,6 +513,11 @@ func (p *NodeProvider) GetNodeEnvVars(ctx *generate.GenerateContext) map[string]
 		envVars["YARN_PRODUCTION"] = "false"
 	}
 
+	if p.packageManager == PackageManagerBun {
+		// Keep symlinks project-local in node_modules across container build layers
+		envVars["BUN_INSTALL_GLOBAL_STORE"] = "0"
+	}
+
 	// TODO why are we special-casing astro here? Smells like a misunderstanding of how astro works...
 	if p.isAstro(ctx) && !p.isAstroSPA(ctx) {
 		maps.Copy(envVars, p.getAstroEnvVars())
@@ -510,9 +530,12 @@ func (p *NodeProvider) hasDependency(dependency string) bool {
 	return p.packageJson.hasDependency(dependency)
 }
 
-// if 'packageManager' field exists in package.json, then assume corepack unless using bun
+// Use Corepack for package managers that are not installed directly through mise.
 func (p *NodeProvider) usesCorepack() bool {
-	return p.packageJson != nil && p.packageJson.PackageManager != nil && p.packageManager != PackageManagerBun
+	return p.packageJson != nil &&
+		p.packageJson.PackageManager != nil &&
+		p.packageManager != PackageManagerBun &&
+		p.packageManager != PackageManagerPnpm
 }
 
 func (p *NodeProvider) usesPuppeteer() bool {
@@ -521,6 +544,38 @@ func (p *NodeProvider) usesPuppeteer() bool {
 
 func (p *NodeProvider) usesProductionPlaywright() bool {
 	return p.workspace.HasProductionDependency("playwright")
+}
+
+// Mise already parsed package.json (devEngines / packageManager). Use that when it names exactly one manager.
+func packageManagerFromIdiomaticMise(ctx *generate.GenerateContext) (PackageManager, bool) {
+	versions, err := ctx.GetMiseStepBuilder().GetMisePackageVersions(ctx)
+	if err != nil {
+		ctx.Logger.LogWarn("Failed to get package versions from mise: %s", err.Error())
+		return "", false
+	}
+
+	var found []string
+	for _, name := range []string{"pnpm", "yarn", "bun", "npm"} {
+		if pkg := versions[name]; pkg != nil && pkg.Source == "idiomatic-version-file" {
+			found = append(found, name)
+		}
+	}
+	if len(found) != 1 {
+		return "", false
+	}
+
+	switch found[0] {
+	case "pnpm":
+		return PackageManagerPnpm, true
+	case "npm":
+		return PackageManagerNpm, true
+	case "bun":
+		return PackageManagerBun, true
+	case "yarn":
+		return parseYarnPackageManager(versions["yarn"].Version), true
+	default:
+		return "", false
+	}
 }
 
 // determine the major version of yarn from a version string. These major versions are installed and managed quite
@@ -554,6 +609,10 @@ func (p *NodeProvider) getPackageManager(ctx *generate.GenerateContext) PackageM
 		} else {
 			log.Warnf("Unknown package manager `%s` specified in package.json, defaulting to npm", pmName)
 		}
+	}
+
+	if pm, ok := packageManagerFromIdiomaticMise(ctx); ok {
+		return pm
 	}
 
 	// Fall back to file-based detection

@@ -18,7 +18,7 @@ built on BuildKit with support for Node, Python, Go, PHP, and more.
 Follow these instructions carefully when writing code:
 
 - When writing a comment describing a function, do not start the comment with the name of the function
-- Assume the person reading this code is an expert software engineer, but is not familiar with the internals of every system. Include concise one-line comments explaining key hooks, API usage, blocks of logic, etc., to help the reader quickly understand the code you've written.
+- Assume the person reading this code is an expert software engineer, but is not familiar with the internals of every system or the nuances of every target language/runtime. Include concise one-line comments explaining key hooks, API usage, blocks of logic, and non-obvious language/runtime quirks (e.g., evaluation order, SDK vs. runtime versioning schemes) in both code and test files to help the reader quickly understand what you've written.
 - Follow Go conventions and existing patterns in the codebase
 - Prefer early `return`s or `continue`s to `if` nesting
 - Use appropriate error handling with proper error wrapping
@@ -34,11 +34,19 @@ Follow these instructions carefully when writing code:
   pnpm-lock.yaml, etc.). Always use the respective package manager to generate
   or update lockfiles. Manual edits can result in invalid checksums and broken
   builds.
+- When setting a framework's environment variables, use the exact values that
+  framework documents and add a 1-2 line comment saying why those values are
+  required. Put reference URLs on their own comment line. Do not reuse another
+  framework's spellings (`production` vs `prod`, `false` vs `0`): a lookalike
+  value can select a different mode or stay truthy.
 
 # Workflow
 
 - If mise is not available in your environment, [install it](https://mise.jdx.dev/installing-mise.html)
 - Take a careful look at @mise.toml to understand what commands should be run at different points in the project lifecycle
+- Before every change to a Mise TOML configuration file or Mise task, consult
+  the [Mise documentation index](https://mise.jdx.dev/llms.txt) and read the
+  relevant linked documentation to verify the syntax and behavior being changed.
 - Do not worry about docker cache, etc. Never run `docker system prune` or other similar commands.
 - Do not run `go` directly. Instead, inspect @mise.toml and use `mise run <task>` to run various dev lifecycle commands. For instance, you should not run `go vet`, `go fmt`, `go test`, etc directly.
 - After making code changes, run `mise run check`
@@ -68,7 +76,7 @@ There are normal unit tests, snapshot tests, and integration tests. The integrat
 ## Integration Tests
 
 * Run `mise run test-integration-cwd` from within an `examples/` directory to run the integration test for that example.
-* `test.json` files are JSONC format and support comments. Use comments to explain temporary workarounds or special test conditions.
+* `test.json` files are JSONC format and support comments. Use comments to explain temporary workarounds, special test conditions, or non-obvious language/runtime nuances (such as why a configured SDK version produces a different runtime version string in `expectedOutput`).
 * In `test.json` we should avoid using `justBuild` for all but the most simple projects. `justBuild` does not test `expectedOutput` or any other assertions.
 * If the project has a server component, we should use a `httpCheck` test. Read the @docs/src/content/docs/guides/developing-locally.md guide, specifically the `### HTTP Checks` section for more information.
 * `httpCheck` assertions assume that `$PORT` is respected.
@@ -76,7 +84,8 @@ There are normal unit tests, snapshot tests, and integration tests. The integrat
 
 ## Unit tests
 
-* Do not test log output.
+* Do not assert that specific log messages exist unless asked.
+* Name a test after the behavior it checks. Do not use a generic name such as `TestZig` when the function checks detection, a start command, or another specific outcome.
 
 # Documentation
 
@@ -85,6 +94,15 @@ There are normal unit tests, snapshot tests, and integration tests. The integrat
 
 # File Conventions
 
-- Markdown files in @docs/src/content/docs/ should be limited to 80 columns
 - Do not fix indentation or formatting manually. This is corrected automatically using `mise run check`
 - NEVER commit language-specific cache or build artifacts (e.g. Python `__pycache__/`, `*.pyc`, `*.pyo` files). If you encounter build artifacts that are not excluded by .gitignore, add appropriate patterns to .gitignore to exclude them
+
+# Mise Functionality
+
+If work requires deep knowledge of mise internals, clone the project into `tmp/mise` and investigate the source code.
+
+https://github.com/jdx/mise
+
+## Pull Requests
+
+When writing a pull request add a "---\nPlease remove this to indicate you've reviewed and deslopped your PR description"

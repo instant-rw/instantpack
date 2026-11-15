@@ -56,6 +56,9 @@
    "RAILPACK_VERSION": "dev"
   }
  },
+ "exclude": [
+  "node_modules"
+ ],
  "steps": [
   {
    "assets": {
@@ -77,7 +80,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.10.15"
     }
    ],
    "name": "packages:mise",
@@ -164,7 +167,7 @@
   {
    "commands": [
     {
-     "cmd": "mise install-into caddy@2.11.4 /railpack/caddy"
+     "cmd": "mise install-into caddy@2.11.7 /railpack/caddy"
     },
     {
      "path": "/railpack/caddy"
@@ -175,7 +178,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.10.15"
     }
    ],
    "name": "packages:caddy",
@@ -219,7 +222,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.10.15"
     }
    ],
    "name": "packages:apt:runtime"

@@ -1,5 +1,6 @@
 [env]
 BUILDKIT_HOST = "docker-container://buildkit"
+TMP_DIR = "{{config_root}}/tmp"
 RAILPACK_MISE_VERSION = "{{read_file(path='core/mise/version.txt')}}"
 
 _.path = './bin'
@@ -8,6 +9,7 @@ _.path = './bin'
 go = "1.26"
 golangci-lint = "latest"
 bun = "1.3"
+jq = "latest"
 
 [settings]
 experimental = true
@@ -20,6 +22,7 @@ locked = true
 
 [tasks.setup]
 run = [
+  'mkdir -p "$TMP_DIR"',
   "mise install",
   "mise run run-buildkit-container",
 ]
@@ -27,10 +30,15 @@ run = [
 [tasks.run-buildkit-container]
 # Mount buildkitd.toml so host.docker.internal:7890 (local registry) is reachable over HTTP
 # `.template` ensures it isn't picked up by the mise task management
+# Named volume for /var/lib/buildkit: the image declares it as a VOLUME, so
+# without this every run mints a leaked 64-hex anonymous volume.
+# host-gateway is required on Linux (including GHA) so host.docker.internal resolves to the host, allowing BuildKit to access the local image registry (:7890)
 run = '''
 docker rm -f buildkit 2>/dev/null || true
 docker run --rm --privileged -d --name buildkit \
+  --add-host=host.docker.internal:host-gateway \
   -e BUILDKIT_DEBUG=1 \
+  -v buildkit-state:/var/lib/buildkit \
   -v "$PWD/.mise/tasks/buildkitd.toml.template:/etc/buildkit/buildkitd.toml:ro" \
   moby/buildkit:latest \
   --config /etc/buildkit/buildkitd.toml
@@ -49,13 +57,15 @@ run = "go build -o bin/instantpack cmd/cli/main.go"
 
 [tasks.clean]
 run = [
-  "rm -rf bin dist docs/dist",
+  "rm -rf bin dist docs/dist tmp",
   "find . -type d -name node_modules -prune -exec rm -rf {} +",
   # clean up buildkit cache, avoids cached layers from being used
-  "docker exec buildkit buildctl prune",
+  "docker exec buildkit buildctl prune || true",
   "rm -f *.test",
   # stop all railpack containers
   "docker ps -q --filter name=railpack | xargs -r docker stop",
+  # remove leaked integration-test service containers and their anonymous volumes (-v)
+  "docker ps -aq --filter \"label=com.railpack.integration-test\" | xargs -r docker rm -f -v",
   # remove all images created by the integration test suite
   "docker images 'railpack-test-*' -q | xargs -r docker rmi -f",
   # remove images created by manually running `railpack build` against a project example

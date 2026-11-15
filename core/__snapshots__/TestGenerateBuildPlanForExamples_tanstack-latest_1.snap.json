@@ -65,6 +65,9 @@
    "RAILPACK_VERSION": "dev"
   }
  },
+ "exclude": [
+  "node_modules"
+ ],
  "steps": [
   {
    "assets": {
@@ -86,7 +89,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.10.15"
     }
    ],
    "name": "packages:mise",
@@ -175,7 +178,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.10.15"
     }
    ],
    "name": "packages:apt:runtime"

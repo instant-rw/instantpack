@@ -2,7 +2,10 @@ package php
 
 import (
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -11,6 +14,7 @@ import (
 	"github.com/railwayapp/railpack/core/generate"
 	"github.com/railwayapp/railpack/core/plan"
 	"github.com/railwayapp/railpack/core/providers/node"
+	"github.com/railwayapp/railpack/internal/utils"
 	"github.com/stretchr/objx"
 )
 
@@ -20,11 +24,27 @@ const (
 	COMPOSER_CACHE_DIR   = "/opt/cache/composer"
 )
 
+// git, zip, and unzip are Composer's image runtime dependencies (.composer-rundeps):
+// https://github.com/composer/docker/blob/master/latest/Dockerfile
+// That image is Alpine and already has CA certificates. FrankenPHP is Debian, so ca-certificates is included here too.
+var composerRuntimeAptPackages = []string{
+	"git",
+	"zip",
+	"unzip",
+	"ca-certificates",
+}
+
 //go:embed Caddyfile
 var caddyfileTemplate string
 
 //go:embed start-container.sh
 var startContainerScript string
+
+//go:embed start-container.laravel.sh
+var startContainerLaravelScript string
+
+//go:embed start-container.symfony.sh
+var startContainerSymfonyScript string
 
 //go:embed php.ini
 var phpIniTemplate string
@@ -55,7 +75,7 @@ func (p *PhpProvider) Plan(ctx *generate.GenerateContext) error {
 		return fmt.Errorf("failed to get config files: %w", err)
 	}
 
-	isLaravel := p.usesLaravel(ctx)
+	framework := p.getFramework(ctx)
 
 	prepare := ctx.NewCommandStep("prepare")
 	prepare.AddInput(plan.NewStepLayer(phpImageStep.Name()))
@@ -76,14 +96,14 @@ func (p *PhpProvider) Plan(ctx *generate.GenerateContext) error {
 		return err
 	}
 
-	if isLaravel {
-		ctx.Logger.LogInfo("Found Laravel app")
+	if framework != "" {
+		ctx.Logger.LogInfo("Found %s app", framework)
 	}
 
-	ctx.Metadata.SetBool("phpLaravel", isLaravel)
+	ctx.Metadata.Set("phpFramework", framework)
 
 	if isNode {
-		err = p.DeployWithNode(ctx, nodeProvider, composer, isLaravel)
+		err = p.DeployWithNode(ctx, nodeProvider, composer, framework)
 		if err != nil {
 			return err
 		}
@@ -118,7 +138,8 @@ func (p *PhpProvider) Prepare(ctx *generate.GenerateContext, prepare *generate.C
 	prepare.Assets["php.ini"] = configFiles.PhpIni.Contents
 	prepare.Assets["start-container.sh"] = configFiles.StartContainerScript.Contents
 
-	prepare.AddEnvVars(map[string]string{
+	framework := p.getFramework(ctx)
+	envVars := map[string]string{
 		"APP_ENV":       "production",
 		"APP_DEBUG":     "false",
 		"APP_LOCALE":    "en",
@@ -127,8 +148,21 @@ func (p *PhpProvider) Prepare(ctx *generate.GenerateContext, prepare *generate.C
 		"SERVER_NAME":   ":80",
 		"PHP_INI_DIR":   "/usr/local/etc/php",
 		"OCTANE_SERVER": "frankenphp",
-		"IS_LARAVEL":    strconv.FormatBool(p.usesLaravel(ctx)),
-	})
+		// Copied start-container.sh files still branch on $IS_LARAVEL. Unset, they skip Laravel startup.
+		// https://github.com/railwayapp/railpack/blob/main/core/providers/php/start-container.sh
+		"IS_LARAVEL": strconv.FormatBool(framework == "laravel"),
+	}
+	if framework == "symfony" {
+		// Symfony only treats the env name "prod" as production (when@prod, .env.prod). "production" does not match.
+		// APP_DEBUG must be "0". A bool cast of the string "false" is true, and the runtime treats only "1" as debug.
+		// https://symfony.com/doc/current/configuration.html#selecting-the-active-environment
+		envVars["APP_ENV"] = "prod"
+		envVars["APP_DEBUG"] = "0"
+	}
+	prepare.AddEnvVars(envVars)
+	// Final image env only inherits Deploy.Inputs / Deploy.Variables, not
+	// prepare step vars alone (Symfony takes the non-Node path with Base=build).
+	maps.Copy(ctx.Deploy.Variables, envVars)
 	prepare.AddCommands([]plan.Command{
 		plan.NewExecCommand("mkdir -p /usr/local/etc/php/conf.d"),
 		plan.NewExecCommand("mkdir -p /conf.d/"),
@@ -178,7 +212,7 @@ func (p *PhpProvider) InstallCompose(ctx *generate.GenerateContext, composer *ge
 	}
 }
 
-func (p *PhpProvider) DeployWithNode(ctx *generate.GenerateContext, nodeProvider node.NodeProvider, composer *generate.CommandStepBuilder, isLaravel bool) error {
+func (p *PhpProvider) DeployWithNode(ctx *generate.GenerateContext, nodeProvider node.NodeProvider, composer *generate.CommandStepBuilder, framework string) error {
 	err := nodeProvider.Initialize(ctx)
 	if err != nil {
 		return err
@@ -206,8 +240,9 @@ func (p *PhpProvider) DeployWithNode(ctx *generate.GenerateContext, nodeProvider
 	}
 	nodeProvider.Build(ctx, build)
 
-	if isLaravel {
+	if framework == "laravel" {
 		build.AddCommands([]plan.Command{
+			// artisan cache commands below write into these directories, so they have to exist in this step.
 			plan.NewExecShellCommand("mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache && chmod -R a+rw storage"),
 			// config values like APP_KEY are resolved and baked into bootstrap/cache/config.php. Runtime env vars are ignored
 			// for cached configs, leading to MissingAppKeyException if APP_KEY was unset at cache time.
@@ -248,6 +283,7 @@ func (p *PhpProvider) ComposerSupportingFiles(ctx *generate.GenerateContext) []s
 		"**/composer.json",
 		"**/composer.lock",
 		"artisan",
+		"bin/console",
 	}
 
 	var allFiles []string
@@ -290,7 +326,8 @@ func (p *PhpProvider) getPhpExtensions(ctx *generate.GenerateContext) []string {
 		})...)
 	}
 
-	if p.usesLaravel(ctx) {
+	switch p.getFramework(ctx) {
+	case "laravel":
 		// https://laravel.com/docs/12.x/deployment#server-requirements
 		extensions = append(extensions,
 			"ctype",
@@ -306,6 +343,9 @@ func (p *PhpProvider) getPhpExtensions(ctx *generate.GenerateContext) []string {
 			"session",
 			"tokenizer",
 			"xml")
+	case "symfony":
+		// Avoid Symfony deprecation noise and match common webapp needs
+		extensions = append(extensions, "intl")
 	}
 
 	if dbConnection := ctx.Env.GetVariable("DB_CONNECTION"); dbConnection != "" {
@@ -320,6 +360,9 @@ func (p *PhpProvider) getPhpExtensions(ctx *generate.GenerateContext) []string {
 	if p.needsRedisExtension(ctx, composerJson) {
 		extensions = append(extensions, "redis")
 	}
+
+	// Map iteration order from composer.json is non-deterministic, so sort to keep the extension list stable across plans.
+	sort.Strings(extensions)
 
 	return extensions
 }
@@ -350,8 +393,60 @@ func (p *PhpProvider) needsRedisExtension(ctx *generate.GenerateContext, compose
 	return false
 }
 
+func (p *PhpProvider) getFramework(ctx *generate.GenerateContext) string {
+	if p.usesLaravel(ctx) {
+		return "laravel"
+	}
+	if p.usesSymfony(ctx) {
+		return "symfony"
+	}
+	return ""
+}
+
+func (p *PhpProvider) startContainerScriptFor(framework string) string {
+	switch framework {
+	case "laravel":
+		return startContainerLaravelScript
+	case "symfony":
+		return startContainerSymfonyScript
+	default:
+		return startContainerScript
+	}
+}
+
 func (p *PhpProvider) usesLaravel(ctx *generate.GenerateContext) bool {
 	return ctx.App.HasFile("artisan")
+}
+
+func (p *PhpProvider) usesSymfony(ctx *generate.GenerateContext) bool {
+	if p.composerRequires(ctx, "symfony/framework-bundle") {
+		return true
+	}
+	// Flex is Symfony's Composer plugin. It installs config recipes and records them in symfony.lock.
+	// bin/console is the framework CLI. Both files mean this is a Symfony app when composer.json
+	// does not list symfony/framework-bundle directly.
+	// https://symfony.com/doc/current/setup/flex.html
+	return ctx.App.HasFile("bin/console") && ctx.App.HasFile("symfony.lock")
+}
+
+// True when composer.json require or require-dev contains the package.
+func (p *PhpProvider) composerRequires(ctx *generate.GenerateContext, pkg string) bool {
+	composerJson, err := p.readComposerJson(ctx)
+	if err != nil {
+		return false
+	}
+
+	for _, section := range []string{"require", "require-dev"} {
+		deps, ok := composerJson[section].(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, found := deps[pkg]; found {
+			return true
+		}
+	}
+
+	return false
 }
 
 type ConfigFiles struct {
@@ -361,16 +456,16 @@ type ConfigFiles struct {
 }
 
 func (p *PhpProvider) getConfigFiles(ctx *generate.GenerateContext) (*ConfigFiles, error) {
+	framework := p.getFramework(ctx)
 	phpRootDir := "/app"
 	if variable := ctx.Env.GetVariable("RAILPACK_PHP_ROOT_DIR"); variable != "" {
 		phpRootDir = variable
-	} else if p.usesLaravel(ctx) {
+	} else if framework == "laravel" || framework == "symfony" {
 		phpRootDir = "/app/public"
 	}
 
 	data := map[string]any{
 		"RAILPACK_PHP_ROOT_DIR": phpRootDir,
-		"IS_LARAVEL":            p.usesLaravel(ctx),
 	}
 
 	caddyfile, err := ctx.TemplateFiles([]string{"Caddyfile"}, caddyfileTemplate, data)
@@ -378,7 +473,9 @@ func (p *PhpProvider) getConfigFiles(ctx *generate.GenerateContext) (*ConfigFile
 		return nil, err
 	}
 
-	startContainerScript, err := ctx.TemplateFiles([]string{"start-container.sh"}, startContainerScript, data)
+	// Always install as /start-container.sh; select framework-specific default from the repo
+	startScriptDefault := p.startContainerScriptFor(framework)
+	startContainerScript, err := ctx.TemplateFiles([]string{"start-container.sh"}, startScriptDefault, data)
 	if err != nil {
 		return nil, err
 	}
@@ -405,11 +502,7 @@ func (p *PhpProvider) phpImagePackage(ctx *generate.GenerateContext) (*generate.
 		return getPhpImage(DEFAULT_PHP_VERSION)
 	})
 
-	imageStep.AptPackages = append(imageStep.AptPackages, "git", "zip", "unzip", "ca-certificates")
-
-	// Include both build and runtime apt packages since we don't have a separate runtime image
-	imageStep.AptPackages = append(imageStep.AptPackages, ctx.Config.BuildAptPackages...)
-	imageStep.AptPackages = append(imageStep.AptPackages, ctx.Config.Deploy.AptPackages...)
+	imageStep.AptPackages = combinedImageAptPackages(ctx)
 
 	php := imageStep.Default("php", DEFAULT_PHP_VERSION)
 
@@ -444,6 +537,33 @@ func (p *PhpProvider) phpImagePackage(ctx *generate.GenerateContext) (*generate.
 	})
 
 	return imageStep, nil
+}
+
+// The FrankenPHP image is both the build environment and the final image, so the
+// two Apt lists are installed together. "..." is dropped because there is no
+// separate runtime base whose packages it would retain or replace.
+// Deploy packages are cleared so the generic runtime apt step does not install them again.
+func combinedImageAptPackages(ctx *generate.GenerateContext) []string {
+	configured := ctx.Config.BuildAptPackages != nil || ctx.Config.Deploy.AptPackages != nil
+	if configured {
+		ctx.Logger.LogInfo("Deploy and build apt packages are combined in the PHP provider")
+	}
+
+	packages := append([]string{}, composerRuntimeAptPackages...)
+	packages = append(packages, withoutSpread(ctx.Config.BuildAptPackages)...)
+	packages = append(packages, withoutSpread(ctx.Config.Deploy.AptPackages)...)
+	ctx.Config.Deploy.AptPackages = nil
+
+	return utils.RemoveDuplicates(packages)
+}
+
+// "..." is meaningless here. Build and deploy share the FrankenPHP image,
+// so there is no separate package list for the spread to retain or replace.
+func withoutSpread(packages []string) []string {
+	// Clone so the Mise builder still sees "..." on the original config list.
+	return slices.DeleteFunc(slices.Clone(packages), func(pkg string) bool {
+		return pkg == "..."
+	})
 }
 
 func getPhpImage(phpVersion string) string {

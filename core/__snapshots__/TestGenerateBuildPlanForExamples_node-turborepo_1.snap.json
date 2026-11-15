@@ -19,6 +19,10 @@
   "npm-install": {
    "directory": "/root/.npm",
    "type": "shared"
+  },
+  "turbo": {
+   "directory": "/app/.turbo/cache",
+   "type": "shared"
   }
  },
  "deploy": {
@@ -68,6 +72,9 @@
    "RAILPACK_VERSION": "dev"
   }
  },
+ "exclude": [
+  "node_modules"
+ ],
  "steps": [
   {
    "assets": {
@@ -89,7 +96,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-builder:mise-2026.10.15"
     }
    ],
    "name": "packages:mise",
@@ -153,6 +160,10 @@
      "src": "packages/utils/package.json"
     },
     {
+     "dest": "turbo.json",
+     "src": "turbo.json"
+    },
+    {
      "cmd": "npm install"
     }
    ],
@@ -175,6 +186,7 @@
   {
    "caches": [
     "node-modules",
+    "turbo",
     "next-apps-web"
    ],
    "commands": [
@@ -211,7 +223,7 @@
    ],
    "inputs": [
     {
-     "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.8.6"
+     "image": "ghcr.io/instant-rw/instantpack-runtime:mise-2026.10.15"
     }
    ],
    "name": "packages:apt:runtime"
