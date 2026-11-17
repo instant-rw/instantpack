@@ -86,6 +86,11 @@ type NodeProvider struct {
 	packageJson    *PackageJson
 	packageManager PackageManager
 	workspace      *Workspace
+
+	// Set for SvelteKit apps only: the adapter, and the config file that imports it with that file's contents.
+	svelteKitAdapter    string
+	svelteKitConfigFile string
+	svelteKitConfig     string
 }
 
 func (p *NodeProvider) Name() string {
@@ -106,6 +111,10 @@ func (p *NodeProvider) Initialize(ctx *generate.GenerateContext) error {
 		return err
 	}
 	p.workspace = workspace
+
+	if p.isSvelteKit() {
+		p.detectSvelteKitAdapter(ctx)
+	}
 
 	return nil
 }
@@ -249,6 +258,10 @@ func (p *NodeProvider) Plan(ctx *generate.GenerateContext) error {
 }
 
 func (p *NodeProvider) StartCommandHelp() string {
+	if p.workspace != nil && p.isSvelteKit() {
+		return p.svelteKitStartCommandHelp()
+	}
+
 	return "To configure your start command, Railpack will check:\n\n" +
 		"1. A \"start\" script in your package.json:\n" +
 		"   \"scripts\": {\n" +

@@ -33,7 +33,9 @@ func NewApp(path string) (*App, error) {
 	var source string
 
 	if filepath.IsAbs(path) {
-		source = path
+		// An uncleaned path such as `/app/.` puts mise's ceiling (the parent of the source) on the source itself, and
+		// mise then ignores the app's own version files (package.json packageManager, .nvmrc, ...).
+		source = filepath.Clean(path)
 	} else {
 		currentDir, err := os.Getwd()
 		if err != nil {

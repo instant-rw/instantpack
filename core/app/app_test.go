@@ -55,6 +55,17 @@ func TestAppAbsolutePath(t *testing.T) {
 	require.Equal(t, app.Source, absPath)
 }
 
+// A builder that appends a root directory of "." passes paths like this one.
+func TestAppAbsolutePathIsCleaned(t *testing.T) {
+	absPath, err := filepath.Abs("../../examples/node-bun")
+	require.NoError(t, err)
+
+	app, err := NewApp(absPath + "/./")
+	require.NoError(t, err)
+
+	require.Equal(t, absPath, app.Source)
+}
+
 func TestAppReadJsonWithComments(t *testing.T) {
 	app, err := NewApp("../../examples/config-file")
 	require.NoError(t, err)
